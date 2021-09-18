@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis-master
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis-master
+  template:
+    metadata:
+      labels:
+        app: redis-master
+    spec:
+      containers:
+      - name: redis-init
+        image: my-redis:v0.0.4
+        imagePullPolicy: Never
+        command: ['sh', '-c']
+        args:
+        - awk 'END {if ($0 ~ /replicaof/) cmd="sed -i \$d "FILENAME; system(cmd); }' /usr/local/etc/redis/conf/redis.conf
+          awk 'END {if ($0 ~ /user default/) cmd="sed -i \$d "FILENAME; system(cmd); }' /usr/local/etc/redis/conf/redis.conf
+          echo "bind 0.0.0.0">/usr/local/etc/redis/conf/slave1.conf;
+          echo "port 6379">>/usr/local/etc/redis/conf/slave1.conf;
+          echo "replicaof $POD_IP 6379">>/usr/local/etc/redis/conf/slave1.conf;
+          echo "appendonly no">>/usr/local/etc/redis/conf/slave1.conf;
+          echo "requirepass quhuo">>/usr/local/etc/redis/conf/slave1.conf;
+          echo "masterauth quhuo">>/usr/local/etc/redis/conf/slave1.conf;
+          echo "logfile /data/redis.log">>/usr/local/etc/redis/conf/slave1.conf;
+          cp /usr/local/etc/redis/conf/slave1.conf /usr/local/etc/redis/conf/slave0.conf;
+          echo "port 26379">/usr/local/etc/redis/conf/sentinel1.conf;
+          echo "sentinel monitor mymaster $POD_IP 6379 1" >> /usr/local/etc/redis/conf/sentinel1.conf;
+          echo "sentinel down-after-milliseconds mymaster 30000" >> /usr/local/etc/redis/conf/sentinel1.conf;
+          echo "sentinel failover-timeout mymaster 180000" >> /usr/local/etc/redis/conf/sentinel1.conf;
+          echo "sentinel parallel-syncs mymaster 1" >> /usr/local/etc/redis/conf/sentinel1.conf;
+          echo "sentinel auth-pass mymaster quhuo" >> /usr/local/etc/redis/conf/sentinel1.conf;
+          echo "logfile /data/sentinel.log" >> /usr/local/etc/redis/conf/sentinel1.conf;
+          while true; do
+            sleep 5;
+          done;
+        env:
+          - name: POD_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+        volumeMounts:
+        - name: redis-conf
+          mountPath: /usr/local/etc/redis/conf
+      - name: redis-master
+        image: my-redis:v0.0.4
+        imagePullPolicy: Never
+        command: ['redis-server', '/usr/local/etc/redis/redis.conf']
+        ports:
+        - containerPort: 6379
+        volumeMounts:
+        - name: redis-conf
+          mountPath: /usr/local/etc/redis
+        - name: redis-data
+          mountPath: /data
+      volumes:
+      - name: redis-conf
+        hostPath:
+          path: /hostpath/redis/conf
+      - name: redis-data
+        hostPath:
+          path: /hostpath/data/redis/master

@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis-sentinel
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis-sentinel
+  template:
+    metadata:
+      labels:
+        app: redis-sentinel
+    spec:
+      containers:
+      - name: redis-sentinel
+        image: my-redis:v0.0.4
+        imagePullPolicy: Never
+        command: ['redis-sentinel', '/usr/local/etc/redis/sentinel1.conf']
+        ports:
+        - containerPort: 26379
+        volumeMounts:
+        - name: redis-conf
+          mountPath: /usr/local/etc/redis
+        - name: redis-data
+          mountPath: /data
+      volumes:
+      - name: redis-conf
+        hostPath:
+          path: /hostpath/redis/conf
+      - name: redis-data
+        hostPath:
+          path: /hostpath/redis/sentinel
